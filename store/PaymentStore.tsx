@@ -2,14 +2,18 @@ import { makeAutoObservable, runInAction } from "mobx";
 import { apiService } from "@/utils/api";
 import Toast from "react-native-toast-message";
 import { authStore } from "./AuthStore";
+import { sub } from "date-fns";
 
 export interface Payment {
   id: string;
   amount: number;
   phoneNumber: string;
   provider: 'MTN' | 'AIRTEL';
-  status: 'PENDING' | 'SUCCESS' | 'FAILED';
+  status: 'PENDING' | 'SUCCESSFUL' | 'FAILED';
   userId: string;
+  subscriptionType: 'WEEKLY' | 'MONTHLY';
+  startDate: string; // ISO date string
+  endDate: string; // ISO date string
 }
 
 class PaymentStore {
@@ -24,7 +28,7 @@ class PaymentStore {
   async fetchPayments() {
     const userId = authStore.user?.id;
     if (!userId) {
-      throw new Error("You must be logged in to fetch payments.");
+      throw new Error('You must be logged in to fetch payments.');
     }
 
     this.loading = true;
@@ -34,49 +38,7 @@ class PaymentStore {
         this.payments = payments.filter((payment: Payment) => payment.userId === userId);
       });
     } catch (error) {
-      Toast.show({ type: "error", text1: "Error", text2: "Failed to fetch payments." });
-      throw error;
-    } finally {
-      runInAction(() => {
-        this.loading = false;
-      });
-    }
-  }
-
-  async updatePaymentStatus(paymentId: string, status: 'PENDING' | 'SUCCESS' | 'FAILED') {
-    this.loading = true;
-    try {
-      await apiService.updatePaymentStatus(paymentId, status);
-      runInAction(() => {
-        const payment = this.payments.find(p => p.id === paymentId);
-        if (payment) {
-          payment.status = status;
-        }
-      });
-      Toast.show({ type: "success", text1: "Success", text2: "Payment status updated successfully!" });
-    } catch (error) {
-      Toast.show({ type: "error", text1: "Error", text2: "Failed to update payment status." });
-    } finally {
-      runInAction(() => {
-        this.loading = false;
-      });
-    }
-  }
-
-  async fetchPaymentHistory() {
-    const userId = authStore.user?.id;
-    if (!userId) {
-      throw new Error("You must be logged in to fetch payment history.");
-    }
-
-    this.loading = true;
-    try {
-      const paymentHistory = await apiService.getPaymentHistory(userId);
-      runInAction(() => {
-        this.payments = paymentHistory;
-      });
-    } catch (error) {
-      Toast.show({ type: "error", text1: "Error", text2: "Failed to fetch payment history." });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to fetch payments.' });
       throw error;
     } finally {
       runInAction(() => {
@@ -86,38 +48,41 @@ class PaymentStore {
   }
 
   // Initiate a payment and update subscription status upon success
-  async initiatePayment(amount: number, phoneNumber: string, provider: 'MTN' | 'AIRTEL') {
+  async initiatePayment(
+    amount: number,
+    phoneNumber: string,
+    provider: 'MTN' | 'AIRTEL',
+    subscriptionType: 'WEEKLY' | 'MONTHLY'
+  ) {
     const userId = authStore.user?.id;
     if (!userId) {
-      throw new Error("You must be logged in to initiate a payment.");
+      throw new Error('You must be logged in to initiate a payment.');
     }
 
-    if (!amount || !phoneNumber || !provider) {
-      throw new Error("Please fill all fields.");
+    if (!amount || !phoneNumber || !provider || !subscriptionType) {
+      throw new Error('Please fill all fields.');
     }
 
     this.loading = true;
     try {
-      const response = await apiService.handlePayment(amount, phoneNumber, provider);
+      const response = await apiService.handlePayment(
+        amount,
+        phoneNumber,
+        provider,
+        subscriptionType,
+        userId
+      );
 
       // Update the subscription status to 'active' upon successful payment
-      await authStore.updateSubscriptionStatus('active');
+      if (response.status === 'SUCCESS') {
+        await authStore.updateSubscriptionStatus(); 
+      }
 
-      runInAction(() => {
-        // Add the new payment to the top of the list
-        this.payments.unshift({
-          id: response.id, // Assuming the response contains the payment ID
-          amount,
-          phoneNumber,
-          provider,
-          status: 'SUCCESS', // Update status to SUCCESS
-          userId,
-        });
-      });
+      
 
-      Toast.show({ type: "success", text1: "Success", text2: "Payment completed successfully!" });
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Payment completed successfully!' });
     } catch (error) {
-      Toast.show({ type: "error", text1: "Error", text2: "Failed to initiate payment." });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to initiate payment.' });
       throw error;
     } finally {
       runInAction(() => {

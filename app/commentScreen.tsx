@@ -9,12 +9,16 @@ const CommentScreen = () => {
   const { questionStore } = useStores();
   const [newResponse, setNewResponse] = useState('');
 
+  // Ensure questionId is a string
+  const resolvedQuestionId = Array.isArray(questionId) ? questionId[0] : questionId;
+
   // Fetch responses for the question
   useEffect(() => {
-    if (questionId) {
-      questionStore.fetchResponses(Array.isArray(questionId) ? questionId[0] : questionId);
+    if (resolvedQuestionId) {
+      console.log('Fetching responses for question:', resolvedQuestionId);
+      questionStore.fetchResponses(resolvedQuestionId);
     }
-  }, [questionId]);
+  }, [resolvedQuestionId]);
 
   const handleSubmitResponse = async () => {
     if (newResponse.trim() === '') {
@@ -23,7 +27,7 @@ const CommentScreen = () => {
     }
 
     try {
-      await questionStore.submitResponse(Array.isArray(questionId) ? questionId[0] : questionId, newResponse);
+      await questionStore.submitResponse(resolvedQuestionId, newResponse);
       setNewResponse('');
       Alert.alert('Success', 'Your response has been submitted.');
     } catch (error) {
@@ -32,7 +36,7 @@ const CommentScreen = () => {
     }
   };
 
-  const question = questionStore.questions.find((q) => q.id === questionId);
+  const question = questionStore.questions.find((q) => q.id === resolvedQuestionId);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -44,10 +48,12 @@ const CommentScreen = () => {
         </View>
 
         <Text style={styles.subHeader}>Responses</Text>
-        {question?.responses.map((response) => (
+        {question?.responses?.map((response) => (
           <View key={response.id} style={styles.responseCard}>
-            <Text style={styles.responseText}>{response.text}</Text>
-            <Text style={styles.userText}>By: {response.userId}</Text>
+            <Text style={styles.responseText}>{response.responseText}</Text>
+            <Text style={styles.userText}>
+              By: {response.user?.firstName} {response.user?.lastName} {response.createdAt}
+            </Text>
           </View>
         ))}
 

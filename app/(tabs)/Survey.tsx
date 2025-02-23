@@ -28,11 +28,11 @@ const SurveyScreen = () => {
   const [showPaymentScreen, setShowPaymentScreen] = useState(false);
   const [animation] = useState(new Animated.Value(0));
 
-  const hasActiveSubscription = authStore.user?.subscriptionStatus === 'active';
+  const hasActiveSubscription = authStore.user?.subscriptionStatus === 'ACTIVE';
 
   const handlePaymentCompletion = async () => {
     try {
-      await authStore.updateSubscriptionStatus('active');
+      await authStore.updateSubscriptionStatus();
       setShowPaymentScreen(false);
       Alert.alert('Success', 'Payment completed! You can now create or upload surveys.');
     } catch (error) {
@@ -136,10 +136,8 @@ const SurveyScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Animated Survey Form */}
-        <Animated.View style={[styles.formContainer, { height: formHeight }]}>
-          {showSurveyForm && <SurveyForm />}
-        </Animated.View>
+   {/* Show Survey Form */}
+   {showSurveyForm && <SurveyForm />}
 
         {/* Survey Upload Guidelines Section */}
         <View style={styles.card}>
@@ -153,8 +151,7 @@ const SurveyScreen = () => {
             <ScrollView style={styles.jsonScroll} showsVerticalScrollIndicator={true}>
               <Text style={styles.jsonExampleText}>
                 {`{
-  "title": "Customer Feedback Survey",
-  "description": "Help us improve our services",
+ 
   "questions": [
     {
       "id": 1,

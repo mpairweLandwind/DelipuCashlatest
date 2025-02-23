@@ -10,11 +10,10 @@ export interface User {
   lastName: string;
   phone?: string;
   avatar?: string;
-  subscriptionStatus?: "active" | "inactive";
+  subscriptionStatus?: "ACTIVE" | "INACTIVE";
 }
 
 class AuthStore {
-  [x: string]: any;
   user: User | null = null;
   token: string | null = null;
   loading: boolean = true;
@@ -64,19 +63,52 @@ class AuthStore {
     AsyncStorage.setItem("user", JSON.stringify(updatedUser));
   }
 
-
-  async updateSubscriptionStatus(status: "active" | "inactive") {
+  // Method to update subscription status
+  async updateSubscriptionStatus() {
     if (!this.user) return;
 
     try {
-      await apiService.updateSubscriptionStatus(this.user.id, status);
+      // Call the backend to update subscription status
+      const response = await apiService.updateSubscriptionStatus(this.user.id);
+
+      // Update the user's subscription status in the store
       runInAction(() => {
-        this.user!.subscriptionStatus = status;
+        if (this.user) {
+          this.user.subscriptionStatus = response.subscriptionStatus;
+        }
       });
+
+      // Save the updated user to AsyncStorage
       await AsyncStorage.setItem("user", JSON.stringify(this.user));
+
       Toast.show({ type: "success", text1: "Success", text2: "Subscription status updated successfully!" });
     } catch (error) {
       Toast.show({ type: "error", text1: "Error", text2: "Failed to update subscription status." });
+    }
+  }
+
+  // Method to check subscription status
+  async checkSubscriptionStatus() {
+    if (!this.user) return;
+
+    try {
+      // Call the backend to check subscription status
+      const response = await apiService.checkSubscriptionStatus(this.user.id);
+
+      // Update the user's subscription status in the store
+      runInAction(() => {
+        if (this.user) {
+          this.user.subscriptionStatus = response.subscriptionStatus;
+        }
+      });
+
+      // Save the updated user to AsyncStorage
+      await AsyncStorage.setItem("user", JSON.stringify(this.user));
+
+      console.log("Subscription status checked:", this.user.subscriptionStatus);
+    } catch (error) {
+      console.error("Failed to check subscription status:", error);
+      Toast.show({ type: "error", text1: "Error", text2: "Failed to check subscription status." });
     }
   }
 

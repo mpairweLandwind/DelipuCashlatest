@@ -24,21 +24,24 @@ const QuestionScreen = () => {
   const [showPaymentScreen, setShowPaymentScreen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerResult | null>(null);
 
-  // Check if the user has an active subscription
-  const hasActiveSubscription = authStore.user?.subscriptionStatus === 'active';
+  const hasActiveSubscription = authStore.user?.subscriptionStatus === 'ACTIVE';
 
-  // Fetch questions on component mount
   useEffect(() => {
-    questionStore.fetchQuestions().catch(error => {
-      console.error('Error fetching questions:', error);
-    });
+    const fetchData = async () => {
+      try {
+        await questionStore.fetchQuestions();
+        await authStore.checkSubscriptionStatus();
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+
+    fetchData();
   }, []);
 
-  // Handle payment completion
   const handlePaymentCompletion = async () => {
     try {
-      // Update the user's subscription status to active
-      await authStore.updateSubscriptionStatus('active');
+      await authStore.updateSubscriptionStatus();
       setShowPaymentScreen(false);
       Alert.alert('Success', 'Payment completed! You can now submit your question or answer questions.');
     } catch (error) {
@@ -46,11 +49,10 @@ const QuestionScreen = () => {
     }
   };
 
-  // Handle question submission
   const handleSubmitQuestion = async () => {
     if (!hasActiveSubscription) {
       Alert.alert('Payment Required', 'Please complete the payment to submit your question.');
-      setShowPaymentScreen(true); // Show payment screen if subscription is inactive
+      setShowPaymentScreen(true);
       return;
     }
 
@@ -68,21 +70,29 @@ const QuestionScreen = () => {
     }
   };
 
-  // Handle answering questions
-  const handleAnswerQuestion = (questionId: string, questionText: string) => {
+  const handleAnswerQuestion = async (questionId: string, questionText: string) => {
     if (!hasActiveSubscription) {
       Alert.alert('Payment Required', 'Please complete the payment to answer questions.');
-      setShowPaymentScreen(true); // Show payment screen if subscription is inactive
+      setShowPaymentScreen(true);
       return;
     }
-
-    router.push({
-      pathname: '/commentScreen',
-      params: { questionId, questionText },
-    });
+  
+    try {
+      // Fetch responses for the selected question
+      await questionStore.fetchResponses(questionId);
+  
+      // Navigate to the CommentScreen with the questionId and questionText
+      router.push({
+        pathname: '/commentScreen',
+        params: { questionId, questionText },
+      });
+    } catch (error) {
+      console.error('Failed to fetch responses:', error);
+      Alert.alert('Error', 'Failed to load responses. Please try again.');
+    }
   };
+  
 
-  // Handle file upload
   const handleFileUpload = async () => {
     if (!authStore.user) {
       Alert.alert('Error', 'You must be logged in to upload a rewards file.');
@@ -159,7 +169,6 @@ const QuestionScreen = () => {
     }
   };
 
-  // Helper function to read file content
   const readFileContent = async (file: any) => {
     const response = await fetch(file.uri);
     return await response.text();
@@ -188,7 +197,7 @@ const QuestionScreen = () => {
           </View>
         </Modal>
 
-        {/* Main Content */}
+        {/* First Card: Ask Your Question */}
         <View style={styles.card}>
           <View style={styles.header}>
             <Text style={styles.headerText}>Ask Your Question</Text>
@@ -212,23 +221,30 @@ const QuestionScreen = () => {
               <Text style={styles.submitButtonText}>Submit</Text>
             </TouchableOpacity>
           </View>
-
-          <Text style={styles.subHeader}>Recent Questions</Text>
-          {questionStore.questions.map((q) => (
-            <View key={q.id} style={styles.questionCard}>
-              <Text style={styles.questionText}>{q.text}</Text>
-              <Text style={styles.timestamp}>{q.createdAt}</Text>
-              <TouchableOpacity
-                style={styles.answerButton}
-                onPress={() => handleAnswerQuestion(q.id, q.text)}
-              >
-                <Text style={styles.answerButtonText}>Answer Question</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
         </View>
 
-        {/* Reward Card */}
+        {/* Second Card: Recent Questions */}
+        <View style={styles.card}>
+          <Text style={styles.subHeader}>Recent Questions</Text>
+          <View style={styles.recentQuestionsContainer}>
+            <ScrollView style={styles.recentQuestionsScrollView}>
+              {questionStore.questions?.map((q) => (
+                <View key={q.id} style={styles.questionCard}> {/* Ensure unique key */}
+                  <Text style={styles.questionText}>{q.text}</Text>
+                  <Text style={styles.timestamp}>{q.createdAt}</Text>
+                  <TouchableOpacity
+                    style={styles.answerButton}
+                    onPress={() => handleAnswerQuestion(q.id, q.text)}
+                  >
+                    <Text style={styles.answerButtonText}>Answer Question</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+
+        {/* Third Card: Answer Questions and Earn Rewards */}
         <View style={styles.rewardCard}>
           <Text style={styles.rewardText}>Answer Questions and Earn Rewards!</Text>
           <Ionicons name="gift" size={40} color="#FFD700" style={styles.giftIcon} />
@@ -304,6 +320,12 @@ const styles = StyleSheet.create({
   submitButton: { backgroundColor: '#0FC2C0', padding: 12, borderRadius: 8, marginLeft: 10 },
   submitButtonText: { color: '#FFF', fontWeight: 'bold' },
   subHeader: { fontSize: 18, fontWeight: 'bold', color: '#EAEAEA', marginBottom: 12 },
+  recentQuestionsContainer: {
+    height: 300, // Set a fixed height for the recent questions container
+  },
+  recentQuestionsScrollView: {
+    flex: 1,
+  },
   questionCard: {
     backgroundColor: '#1E1E1E',
     padding: 16,
@@ -329,7 +351,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E1E1E',
     padding: 16,
     borderRadius: 10,
-    marginBottom: 3,
+    marginBottom: 20, // Added marginBottom to separate cards
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 5,

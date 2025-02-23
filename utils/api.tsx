@@ -11,7 +11,7 @@ declare module "axios" {
 
 // Base Axios instance
 const api = axios.create({
-  baseURL: "http://192.168.0.117:3000/api"
+  baseURL: "http://10.150.13.215:3000/api"
   , // Adjust base URL as needed
   timeout: 15000,
   withCredentials: true, // Include cookies in requests
@@ -91,15 +91,15 @@ export const apiService = {
     }
   },
 
-  async updateSubscriptionStatus(userId: string, status: "active" | "inactive") {
+  async updateSubscriptionStatus(userId: string) {
     try {
-      const response = await api.put(`/auth/${userId}/subscription-status`, { status });
+      const response = await api.put(`/auth/${userId}/subscription-status`);
   
       // Show success message
       Toast.show({
         type: "success",
         text1: "Success",
-        text2: `Subscription updated to ${status}!`,
+        text2: `Subscription updated !`,
       });
   
       return response.data;
@@ -107,6 +107,26 @@ export const apiService = {
       handleError(error as AxiosError, "Failed to update subscription status.");
     }
   },
+
+
+  async checkSubscriptionStatus(userId: string): Promise<{ subscriptionStatus: "ACTIVE" | "INACTIVE" }> {
+    try {
+      const response = await api.get(`/auth/${userId}/subscription-status`);
+  
+      // Show success message
+      Toast.show({
+        type: "success",
+        text1: "Success",
+        text2: `Subscription status is ${response.data.subscriptionStatus}!`,
+      });
+  
+      return { subscriptionStatus: response.data.subscriptionStatus };
+    } catch (error) {
+      handleError(error as AxiosError, "Failed to check subscription status.");
+      throw error; // Re-throw the error for the caller to handle
+    }
+  },
+
 
   async getPaymentHistory(userId: string) {
     try {
@@ -313,7 +333,7 @@ async uploadVideo(file: any, title: string, userId: string) {
 // Question APIs
 async submitQuestion(questionText: string, userId: string) {
   try {
-    const response = await api.post("/questions", { text: questionText, userId });
+    const response = await api.post("/questions/create", { text: questionText, userId });
     Toast.show({ type: "success", text1: "Success", text2: "Question submitted successfully!" });
     return response.data;
   } catch (error) {
@@ -324,7 +344,9 @@ async submitQuestion(questionText: string, userId: string) {
 async getQuestions() {
   try {
     const response = await api.get("/questions/all");
+    console.log(response.data);
     return response.data;
+   
   } catch (error) {
     handleError(error as AxiosError, "Failed to fetch questions.");
   }
@@ -342,10 +364,26 @@ async getQuestionById(questionId: string) {
 // Comment/Answer APIs
 async submitResponse(questionId: string, responseText: string, userId: string) {
   try {
-    const response = await api.post(`/questions/${questionId}/responses`, { text: responseText, userId });
-    Toast.show({ type: "success", text1: "Success", text2: "Response submitted successfully!" });
-    return response.data;
+    // Make the API call to submit the response
+    const response = await api.post(`/questions/${questionId}/responses`, { 
+      responseText, 
+      userId 
+    });
+   
+    // Show success toast notification
+    Toast.show({ 
+      type: "success", 
+      text1: "Success", 
+      text2: "Response submitted successfully!" 
+    });
+
+    // Return the response data with the questionId included
+    return { 
+      ...response.data, 
+      questionId // Ensure questionId is included in the response
+    };
   } catch (error) {
+    // Handle errors gracefully
     handleError(error as AxiosError, "Failed to submit response.");
   }
 },
@@ -372,13 +410,15 @@ async uploadQuestions(questions: any[], userId: string) {
 
 
 // Handle payment function
-async handlePayment(amount: number, phoneNumber: string, provider: 'MTN' | 'AIRTEL') {
+async handlePayment(amount: number, phoneNumber: string, provider: 'MTN' | 'AIRTEL',subscriptionType:'WEEKLY'| 'MONTHLY',userId:string) {
   try {
     // Make a POST request to the backend payment endpoint
     const response = await api.post('/payments/initiate', {
       amount,
       phoneNumber,
       provider, // Pass the payment provider (MTN or AIRTEL)
+      subscriptionType,
+      userId
     });
 
     // Show success message

@@ -24,10 +24,10 @@ const PaymentScreen: React.FC<PaymentScreenProps> = observer(({ onPaymentComplet
 
   const [phoneNumber, setPhoneNumber] = useState(userPhoneNumber);
   const [selectedProvider, setSelectedProvider] = useState<'MTN' | 'AIRTEL' | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<'weekly' | 'monthly' | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<'WEEKLY' | 'MONTHLY' | null>(null);
 
   // Check if the user has an active subscription
-  const hasActiveSubscription = authStore.user?.subscriptionStatus === 'active';
+  const hasActiveSubscription = authStore.user?.subscriptionStatus === 'ACTIVE';
 
   // Update phone number when authStore user changes
   useEffect(() => {
@@ -41,11 +41,11 @@ const PaymentScreen: React.FC<PaymentScreenProps> = observer(({ onPaymentComplet
       return;
     }
 
-    const amount = selectedPlan === 'weekly' ? 1000 : 2000; // Set amount based on the selected plan
-
+    const amount = selectedPlan === 'WEEKLY' ? 1000 : 2000; // Set amount based on the selected plan
+     const paymentPlan = selectedPlan === 'WEEKLY' ? 'WEEKLY' : 'MONTHLY'; // Set payment plan based on the selected plan
     try {
       // Use paymentStore to initiate the payment
-      await paymentStore.initiatePayment(amount, phoneNumber, selectedProvider);
+      await paymentStore.initiatePayment(amount, phoneNumber, selectedProvider, paymentPlan);
       Alert.alert('Success', 'Payment completed successfully!');
       onPaymentComplete(); // Notify parent component
     } catch (error) {
@@ -70,9 +70,9 @@ const PaymentScreen: React.FC<PaymentScreenProps> = observer(({ onPaymentComplet
           <TouchableOpacity
             style={[
               styles.planButton,
-              selectedPlan === 'weekly' && styles.selectedPlanButton,
+              selectedPlan === 'WEEKLY' && styles.selectedPlanButton,
             ]}
-            onPress={() => setSelectedPlan('weekly')}
+            onPress={() => setSelectedPlan('WEEKLY')}
           >
             <Text style={styles.planText}>Weekly</Text>
             <Text style={styles.planPrice}>1000 UGX</Text>
@@ -80,9 +80,9 @@ const PaymentScreen: React.FC<PaymentScreenProps> = observer(({ onPaymentComplet
           <TouchableOpacity
             style={[
               styles.planButton,
-              selectedPlan === 'monthly' && styles.selectedPlanButton,
+              selectedPlan === 'MONTHLY' && styles.selectedPlanButton,
             ]}
-            onPress={() => setSelectedPlan('monthly')}
+            onPress={() => setSelectedPlan('MONTHLY')}
           >
             <Text style={styles.planText}>Monthly</Text>
             <Text style={styles.planPrice}>2000 UGX</Text>
