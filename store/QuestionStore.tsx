@@ -24,6 +24,7 @@ export interface Response {
 }
 
 class QuestionStore {
+  uploadedQuestions: any[] = []; 
   questions: Question[] = [];
   loading: boolean = false;
 
@@ -104,16 +105,24 @@ class QuestionStore {
     if (!userId) {
       throw new Error("You must be logged in to upload questions.");
     }
-
+  
     const isValid = questions.every((q: any) => q.text && q.userId);
     if (!isValid) {
       throw new Error("Invalid question format: Each question must have 'text' and 'userId'.");
     }
-
+  
     try {
-      const uploadedQuestions = await apiService.uploadQuestions(questions, userId);
+      const response = await apiService.uploadQuestions(questions, userId);
+  
+      // Log the API response
+      console.log("API Response:", response);
+  
+      if (!Array.isArray(response.questions)) {
+        throw new Error("Invalid API response: Expected an array of questions.");
+      }
+  
       runInAction(() => {
-        this.questions.unshift(...uploadedQuestions.map((q: any) => ({
+        this.questions.unshift(...response.questions.map((q: any) => ({
           ...q,
           createdAt: format(new Date(q.createdAt), "MMM d, yyyy hh:mm a"),
           responses: [],
@@ -124,7 +133,33 @@ class QuestionStore {
       throw error;
     }
   }
+  
 
+  // Fetch all uploaded questions (no user-specific logic)
+  // Fetch all uploaded questions
+  async fetchUploadedQuestions() {
+    this.loading = true;
+    try {
+      const uploadedQuestions = await apiService.getUploadedQuestions();
+      runInAction(() => {
+        this.uploadedQuestions = uploadedQuestions.map((q: any) => ({
+          id: q.id,
+          text: q.text,
+          type: q.type,
+          options: q.options,
+          correctAnswers: q.correctAnswers,
+          createdAt: q.createdAt ? format(new Date(q.createdAt), "MMM d, yyyy hh:mm a") : "Invalid Date",
+          responses: q.responses || [],
+        }));
+      });
+    } catch (error) {
+      console.error("Failed to fetch uploaded questions:", error);
+    } finally {
+      runInAction(() => {
+        this.loading = false;
+      });
+    }
+  }
   // Submit a response to a question
   async submitResponse(questionId: string, responseText: string) {
   
@@ -148,6 +183,30 @@ class QuestionStore {
       }
     } catch (error) {
       console.error("Failed to submit response:", error);
+      throw error;
+    }
+  }
+
+
+   // Update user points in the database
+   async updateUserPoints(userId: string, points: number) {
+    try {
+      // Call the API to update user points
+      await apiService.updateUserPoints(userId, points);
+      console.log("Points updated successfully!");
+    } catch (error) {
+      console.error("Failed to update user points:", error);
+      throw error;
+    }
+  }
+
+   // Fetch user points from the database
+   async getUserPoints(userId: string) {
+    try {
+      const user = await apiService.getUserPoints(userId);
+      return user;
+    } catch (error) {
+      console.error("Failed to fetch user points:", error);
       throw error;
     }
   }

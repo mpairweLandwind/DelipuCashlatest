@@ -11,7 +11,7 @@ declare module "axios" {
 
 // Base Axios instance
 const api = axios.create({
-  baseURL: "http://10.150.13.215:3000/api"
+  baseURL: "http://10.10.111.93:3000/api"
   , // Adjust base URL as needed
   timeout: 15000,
   withCredentials: true, // Include cookies in requests
@@ -399,7 +399,7 @@ async getResponsesForQuestion(questionId: string) {
 
 async uploadQuestions(questions: any[], userId: string) {
   try {
-    const response = await api.post("/questions/upload", { questions, userId });
+    const response = await api.post("/questions/loadquestions", { questions, userId });
     Toast.show({ type: "success", text1: "Success", text2: "Questions uploaded successfully!" });
     return response.data;
   } catch (error) {
@@ -407,6 +407,50 @@ async uploadQuestions(questions: any[], userId: string) {
     throw error;
   }
 },
+
+ // New function to fetch uploaded questions
+ async getUploadedQuestions() {
+  try {
+    const response = await api.get("/questions/uploaded");
+    return response.data;
+  } catch (error) {
+    handleError(error as AxiosError, "Failed to fetch uploaded questions.");
+  }
+},
+
+
+ // Update user points
+ async updateUserPoints(userId: string, points: number) {
+  try {
+    const response = await api.put(`/auth/${userId}/points`, { points });
+
+    // Show success message
+    Toast.show({
+      type: "success",
+      text1: "Success",
+      text2: "Points updated successfully!",
+    });
+
+    return response.data;
+  } catch (error) {
+    handleError(error as AxiosError, "Failed to update user points.");
+  }
+},
+
+async getUserPoints( userId: string) {
+  try {
+    const response = await api.get(`/auth/${userId}/points`);
+    Toast.show({ type: "success", text1: "Success", text2: "Questions uploaded successfully!" });
+    return response.data;
+  } catch (error) {
+    handleError(error as AxiosError, "Failed to upload questions.");
+    throw error;
+  }
+},
+
+
+
+
 
 
 // Handle payment function

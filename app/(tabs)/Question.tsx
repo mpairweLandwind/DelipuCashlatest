@@ -9,6 +9,7 @@ import {
   TextInput,
   Alert,
   Modal,
+  ActivityIndicator, // Import ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -23,16 +24,29 @@ const QuestionScreen = () => {
   const [question, setQuestion] = useState('');
   const [showPaymentScreen, setShowPaymentScreen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerResult | null>(null);
+  const [loading, setLoading] = useState(false); // Add loading state
 
   const hasActiveSubscription = authStore.user?.subscriptionStatus === 'ACTIVE';
 
+   // Redirect to login if user is not available
+   useEffect(() => {
+    if (!authStore.user) {
+      router.replace('/Login'); // Redirect to the login screen
+    }
+  }, [authStore.user]);
+
   useEffect(() => {
     const fetchData = async () => {
+      if (!authStore.user) return; // Exit if user is not logged in
+
+      setLoading(true); // Set loading to true before fetching data
       try {
         await questionStore.fetchQuestions();
         await authStore.checkSubscriptionStatus();
       } catch (error) {
         console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false); // Set loading to false after fetching data
       }
     };
 
@@ -42,6 +56,8 @@ const QuestionScreen = () => {
   const handlePaymentCompletion = async () => {
     try {
       await authStore.updateSubscriptionStatus();
+       // Refetch the subscription status to ensure it's up-to-date
+       await authStore.checkSubscriptionStatus();
       setShowPaymentScreen(false);
       Alert.alert('Success', 'Payment completed! You can now submit your question or answer questions.');
     } catch (error) {
@@ -55,17 +71,25 @@ const QuestionScreen = () => {
       setShowPaymentScreen(true);
       return;
     }
-
+  
     if (question.trim() === '') {
       Alert.alert('Error', 'Please enter a valid question.');
       return;
     }
-
+  
     try {
+      setLoading(true); // Start loading
       await questionStore.submitQuestion(question);
-      setQuestion('');
-      Alert.alert('Success', 'Your question has been submitted.');
+      setQuestion(''); // Clear the input field
+  
+      // Introduce a delay before refreshing the list
+      setTimeout(async () => {
+        await questionStore.fetchQuestions(); // Refresh the list of questions
+        setLoading(false); // Stop loading
+        Alert.alert('Success', 'Your question has been submitted.');
+      }, 3000); // 3-second delay
     } catch (error) {
+      setLoading(false); // Stop loading in case of error
       Alert.alert('Error', (error as Error).message || 'Failed to submit question.');
     }
   };
@@ -78,10 +102,7 @@ const QuestionScreen = () => {
     }
   
     try {
-      // Fetch responses for the selected question
       await questionStore.fetchResponses(questionId);
-  
-      // Navigate to the CommentScreen with the questionId and questionText
       router.push({
         pathname: '/commentScreen',
         params: { questionId, questionText },
@@ -91,41 +112,47 @@ const QuestionScreen = () => {
       Alert.alert('Error', 'Failed to load responses. Please try again.');
     }
   };
-  
 
   const handleFileUpload = async () => {
     if (!authStore.user) {
       Alert.alert('Error', 'You must be logged in to upload a rewards file.');
       return;
     }
-
+  
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
       if (result.canceled) {
         Alert.alert('Info', 'File selection canceled.');
         return;
       }
-
+  
       const file = result.assets[0];
       const fileContent = await readFileContent(file);
-      const parsedQuestions = JSON.parse(fileContent);
-
-      if (!Array.isArray(parsedQuestions)) {
-        throw new Error('Invalid file format: Expected an array of questions.');
+      let parsedQuestions;
+      try {
+        parsedQuestions = JSON.parse(fileContent);
+      } catch (error) {
+        Alert.alert('Error', 'Invalid JSON file. Please check the file format.');
+        return;
       }
-
-      const formattedQuestions = parsedQuestions.map((q: any, index: number) => {
+  
+      // Check if the parsed JSON has a "questions" key and if it's an array
+      if (!parsedQuestions.questions || !Array.isArray(parsedQuestions.questions)) {
+        throw new Error('Invalid file format: Expected an object with a "questions" array.');
+      }
+  
+      const formattedQuestions = parsedQuestions.questions.map((q: any, index: number) => {
         if (!q.text || !q.type) {
           throw new Error(`Invalid format in question ${index + 1}: Missing 'text' or 'type'.`);
         }
-
+  
         const baseQuestion = {
           text: q.text,
           type: q.type,
           userId: authStore.user?.id || '',
           createdAt: new Date().toISOString(),
         };
-
+  
         switch (q.type) {
           case 'text':
             return baseQuestion;
@@ -161,7 +188,7 @@ const QuestionScreen = () => {
             throw new Error(`Unsupported question type: ${q.type} in question ${index + 1}.`);
         }
       });
-
+  
       await questionStore.uploadQuestions(formattedQuestions);
       Alert.alert('Success', 'Questions uploaded successfully!');
     } catch (error) {
@@ -227,20 +254,27 @@ const QuestionScreen = () => {
         <View style={styles.card}>
           <Text style={styles.subHeader}>Recent Questions</Text>
           <View style={styles.recentQuestionsContainer}>
-            <ScrollView style={styles.recentQuestionsScrollView}>
-              {questionStore.questions?.map((q) => (
-                <View key={q.id} style={styles.questionCard}> {/* Ensure unique key */}
-                  <Text style={styles.questionText}>{q.text}</Text>
-                  <Text style={styles.timestamp}>{q.createdAt}</Text>
-                  <TouchableOpacity
-                    style={styles.answerButton}
-                    onPress={() => handleAnswerQuestion(q.id, q.text)}
-                  >
-                    <Text style={styles.answerButtonText}>Answer Question</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </ScrollView>
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#0FC2C0" />
+                <Text style={styles.loadingText}>Loading questions...</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.recentQuestionsScrollView}>
+                {questionStore.questions?.map((q) => (
+                  <View key={q.id} style={styles.questionCard}>
+                    <Text style={styles.questionText}>{q.text}</Text>
+                    <Text style={styles.timestamp}>{q.createdAt}</Text>
+                    <TouchableOpacity
+                      style={styles.answerButton}
+                      onPress={() => handleAnswerQuestion(q.id, q.text)}
+                    >
+                      <Text style={styles.answerButtonText}>Answer Question</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
           </View>
         </View>
 
@@ -248,12 +282,21 @@ const QuestionScreen = () => {
         <View style={styles.rewardCard}>
           <Text style={styles.rewardText}>Answer Questions and Earn Rewards!</Text>
           <Ionicons name="gift" size={40} color="#FFD700" style={styles.giftIcon} />
-          <TouchableOpacity
-            style={styles.startButton}
-            onPress={() => setShowPaymentScreen(true)}
-          >
-            <Text style={styles.startButtonText}>Pay to Start</Text>
-          </TouchableOpacity>
+         {/* Start Now Button */}
+        <TouchableOpacity
+          style={styles.startButton}
+          onPress={() => {
+            if (!hasActiveSubscription) {
+              Alert.alert('Payment Required', 'Please complete the payment to start answering questions.');
+              setShowPaymentScreen(true);
+            } else {
+              // Logic to start answering questions
+              router.push('/QuestionAnswerScreen');
+            }
+          }}
+        >
+          <Text style={styles.startButtonText}>Start Now</Text>
+        </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.startButton}
@@ -321,7 +364,7 @@ const styles = StyleSheet.create({
   submitButtonText: { color: '#FFF', fontWeight: 'bold' },
   subHeader: { fontSize: 18, fontWeight: 'bold', color: '#EAEAEA', marginBottom: 12 },
   recentQuestionsContainer: {
-    height: 300, // Set a fixed height for the recent questions container
+    height: 300, // Fixed height for the recent questions container
   },
   recentQuestionsScrollView: {
     flex: 1,
@@ -351,7 +394,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E1E1E',
     padding: 16,
     borderRadius: 10,
-    marginBottom: 20, // Added marginBottom to separate cards
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 5,
@@ -361,6 +404,17 @@ const styles = StyleSheet.create({
   rewardText: { fontSize: 20, fontWeight: 'bold', color: '#0FC2C0', textAlign: 'center', marginBottom: 10 },
   startButton: { backgroundColor: '#0FC2C0', padding: 12, borderRadius: 8, alignItems: 'center', width: '80%', marginBottom: 20 },
   startButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    color: '#EAEAEA',
+    marginTop: 10,
+    fontSize: 16,
+  },
 });
 
 export default QuestionScreen;

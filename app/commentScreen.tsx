@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, ScrollView, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  SafeAreaView,
+  ScrollView,
+  Alert,
+} from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useStores } from '@/store/MobxContext';
 
@@ -8,6 +17,7 @@ const CommentScreen = () => {
   const { questionId, questionText } = useLocalSearchParams();
   const { questionStore } = useStores();
   const [newResponse, setNewResponse] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false); // Track submission state
 
   // Ensure questionId is a string
   const resolvedQuestionId = Array.isArray(questionId) ? questionId[0] : questionId;
@@ -26,13 +36,27 @@ const CommentScreen = () => {
       return;
     }
 
+    if (isSubmitting) return; // Prevent multiple submissions
+
+    setIsSubmitting(true); // Disable the submit button
+
     try {
+      // Submit the response
       await questionStore.submitResponse(resolvedQuestionId, newResponse);
-      setNewResponse('');
+      setNewResponse(''); // Clear the input field
+
+      // Show success message
       Alert.alert('Success', 'Your response has been submitted.');
+
+      // Add a delay before refreshing responses
+      setTimeout(async () => {
+        await questionStore.fetchResponses(resolvedQuestionId); // Refresh responses
+        setIsSubmitting(false); // Re-enable the submit button
+      }, 1000); // 1-second delay
     } catch (error) {
       const errorMessage = (error as Error).message || 'Failed to submit response.';
       Alert.alert('Error', errorMessage);
+      setIsSubmitting(false); // Re-enable the submit button on error
     }
   };
 
@@ -65,8 +89,14 @@ const CommentScreen = () => {
           onChangeText={setNewResponse}
           multiline
         />
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmitResponse}>
-          <Text style={styles.submitButtonText}>Submit Answer</Text>
+        <TouchableOpacity
+          style={[styles.submitButton, isSubmitting && styles.disabledButton]} // Disable button style
+          onPress={handleSubmitResponse}
+          disabled={isSubmitting} // Disable button during submission
+        >
+          <Text style={styles.submitButtonText}>
+            {isSubmitting ? 'Submitting...' : 'Submit Answer'}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -99,6 +129,7 @@ const styles = StyleSheet.create({
   },
   submitButton: { backgroundColor: '#0FC2C0', padding: 12, borderRadius: 8, alignItems: 'center' },
   submitButtonText: { color: '#FFF', fontWeight: 'bold' },
+  disabledButton: { backgroundColor: '#666', opacity: 0.7 }, // Style for disabled button
   backButton: { backgroundColor: '#444', padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 10 },
   backButtonText: { color: '#FFF', fontWeight: 'bold' },
 });
